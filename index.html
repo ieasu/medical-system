@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الفحص الطبي الوقائي</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f0f8ff; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        input, select { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; }
+        button { background: #007cba; color: white; padding: 12px 25px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px; }
+        button:hover { background: #005a87; }
+        .exam-item { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 5px; border-right: 4px solid #007cba; }
+        .success { color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> نظام الفحص الطبي الوقائي</h1>
+       <!--    <p class="success"> متصل بقاعدة البيانات السحابية + Netlify Functions</p>      --> 
+
+        <!-- نموذج إضافة فحص جديد -->
+        <div class="form-section">
+            <h2>إضافة فحص جديد</h2>
+            <form id="examForm">
+                <div class="form-group">
+                    <label for="patientName">اسم المريض:</label>
+                    <input type="text" id="patientName" required placeholder="أدخل اسم المريض">
+                </div>
+                <div class="form-group">
+                    <label for="patientAge">العمر:</label>
+                    <input type="number" id="patientAge" required placeholder="أدخل العمر">
+                </div>
+                <div class="form-group">
+                    <label for="examType">نوع الفحص:</label>
+                    <select id="examType" required>
+                        <option value="">اختر نوع الفحص</option>
+                        <option value="blood">فحص الدم</option>
+                        <option value="xray">أشعة سينية</option>
+                        <option value="urine">فحص البول</option>
+                        <option value="pressure">قياس الضغط</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="examResult">نتيجة الفحص:</label>
+                    <input type="text" id="examResult" required placeholder="أدخل نتيجة الفحص">
+                </div>
+                <button type="submit">➕ إضافة الفحص</button>
+            </form>
+        </div>
+
+        <!-- عرض الفحوصات -->
+        <div class="exams-section">
+            <h2>الفحوصات المضافة</h2>
+            <div id="examsList">جاري تحميل البيانات...</div>
+        </div>
+
+        <!-- أزرار التحكم -->
+        <div class="control-section">
+            <h2>إجراءات سريعة</h2>
+            <button onclick="addSampleData()">➕ إضافة بيانات تجريبية</button>
+            <button onclick="clearData()">🗑️ مسح البيانات</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <script>
+        // إعدادات Firebase الخاصة بمشروعك
+        const firebaseConfig = {
+            apiKey: "AIzaSyBRZUmAKOOvlNpDkIHIYPPrgLSudZxiooU",
+            authDomain: "preventive-health-check.firebaseapp.com",
+            projectId: "preventive-health-check",
+            storageBucket: "preventive-health-check.firebasestorage.app",
+            messagingSenderId: "905531480947",
+            appId: "1:905531480947:web:f810504fb795a4bf718306"
+        };
+
+        // تهيئة Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        console.log(' تم توصيل Firebase بنجاح!');
+
+        //  دالة جديدة للمعالجة عبر Netlify
+        async function addExamWithNetlify(examData) {
+            try {
+                // حاولي مع Netlify أولاً
+                const response = await fetch('/.netlify/functions/process-exam', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(examData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    await db.collection('exams').add(result.data);
+                    alert(' تمت المعالجة السحابية عبر Netlify!');
+                } else {
+                    throw new Error('Netlify failed');
+                }
+            } catch (error) {
+                // إذا فشلت، استخدمي Firebase مباشرة
+                await db.collection('exams').add(examData);
+                alert(' تم الحفظ مباشرة في Firebase');
+            }
+        }
+
+        // إضافة فحص جديد (المعدلة)
+        document.getElementById('examForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const examData = {
+                patientName: document.getElementById('patientName').value,
+                patientAge: document.getElementById('patientAge').value,
+                examType: document.getElementById('examType').value,
+                examResult: document.getElementById('examResult').value,
+                timestamp: new Date().toLocaleString('ar-SA'),
+                status: 'مكتمل'
+            };
+            
+            await addExamWithNetlify(examData);
+            document.getElementById('examForm').reset();
+        });
+
+        // عرض الفحوصات
+        db.collection('exams').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
+            const examsList = document.getElementById('examsList');
+            
+            if (snapshot.empty) {
+                examsList.innerHTML = 'لا توجد فحوصات مضافة.';
+                return;
+            }
+            
+            examsList.innerHTML = '';
+            snapshot.forEach(doc => {
+                const exam = doc.data();
+                const examElement = document.createElement('div');
+                examElement.className = 'exam-item';
+                examElement.innerHTML = `
+                    <strong>المريض:</strong> ${exam.patientName}<br>
+                    <strong>العمر:</strong> ${exam.patientAge}<br>
+                    <strong>نوع الفحص:</strong> ${exam.examType}<br>
+                    <strong>النتيجة:</strong> ${exam.examResult}<br>
+                    <strong>الوقت:</strong> ${exam.timestamp}<br>
+                    <strong>الحالة:</strong> ${exam.status}
+                `;
+                examsList.appendChild(examElement);
+            });
+        });
+
+        // إضافة بيانات تجريبية
+        async function addSampleData() {
+            const sampleExams = [
+                { 
+                    patientName: "أحمد محمد", 
+                    patientAge: "35", 
+                    examType: "blood", 
+                    examResult: "طبيعي", 
+                    timestamp: new Date().toLocaleString('ar-SA'),
+                    status: "بيانات تجريبية"
+                },
+                { 
+                    patientName: "فاطمة خالد", 
+                    patientAge: "28", 
+                    examType: "pressure", 
+                    examResult: "120/80", 
+                    timestamp: new Date().toLocaleString('ar-SA'),
+                    status: "بيانات تجريبية"
+                }
+            ];
+            
+            try {
+                for (const exam of sampleExams) {
+                    await db.collection('exams').add(exam);
+                }
+                alert('✅ تم إضافة البيانات التجريبية');
+            } catch (error) {
+                alert('❌ خطأ في إضافة البيانات: ' + error.message);
+            }
+        }
+
+        // مسح البيانات
+        async function clearData() {
+            if (confirm('⚠️ هل أنت متأكدة من مسح جميع البيانات؟')) {
+                try {
+                    const snapshot = await db.collection('exams').get();
+                    const deletePromises = [];
+                    snapshot.forEach(doc => {
+                        deletePromises.push(doc.ref.delete());
+                    });
+                    await Promise.all(deletePromises);
+                    alert('✅ تم مسح جميع البيانات');
+                } catch (error) {
+                    alert('❌ خطأ في مسح البيانات: ' + error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
