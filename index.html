@@ -87,29 +87,30 @@
         console.log(' تم توصيل Firebase بنجاح!');
 
         //  دالة جديدة للمعالجة عبر Netlify
-        async function addExamWithNetlify(examData) {
-            try {
-                // حاولي مع Netlify أولاً
-                const response = await fetch('/.netlify/functions/process-exam', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(examData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    await db.collection('exams').add(result.data);
-                    alert(' تمت المعالجة السحابية عبر Netlify!');
-                } else {
-                    throw new Error('Netlify failed');
-                }
-            } catch (error) {
-                // إذا فشلت، استخدمي Firebase مباشرة
-                await db.collection('exams').add(examData);
-                alert(' تم الحفظ مباشرة في Firebase');
-            }
+       async function addExamWithNetlify(examData) {
+    try {
+        const response = await fetch('https://preventive-health-system.netlify.app/.netlify/functions/process-exam', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(examData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            await db.collection('exams').add(result.data);
+            alert('✅ تمت المعالجة السحابية عبر Netlify!');
+            return true;
+        } else {
+            throw new Error(result.error);
         }
+    } catch (error) {
+        // إذا فشلت، استخدمي Firebase مباشرة
+        await db.collection('exams').add(examData);
+        alert('⚠️ تم الحفظ مباشرة في Firebase');
+        return false;
+    }
+}
 
         // إضافة فحص جديد (المعدلة)
         document.getElementById('examForm').addEventListener('submit', async (e) => {
